@@ -1,3 +1,25 @@
+
+# [iDeviceReRestore](https://downgrade.party)
+
+
+Re-Restore bug discovered by [alitek12](https://twitter.com/alitek123)
+
+Requires saved iOS 9.x blobs (local or Cydia)
+
+32 bit/iOS 9.x only
+
+Prerequisite OS doesn't matter, use DFU if you aren't already on 9.x
+
+Forked from iDeviceRestore by [libimobiledevice](http://libimobiledevice.org/)
+
+Additions by [alitek12](https://twitter.com/alitek123), [Trevor](https://twitter.com/@Thmitt), [Jon](https://twitter.com/@JonathanSeals), and [iApeiron](https://twitter.com/@iApeiron)
+
+Testing by [ee_csw](https://twitter.com/@ee_csw), [Mirko](https://twitter.com/@Mirko_tweets), and [DjSn0wfall](https://twitter.com/@DjSn0wfall)
+
+Having issues? Contact the fork developers above
+
+______________________________________________________________________________
+
 About
 =====
 
@@ -73,3 +95,5 @@ authorized, sponsored, or otherwise approved by Apple Inc.
 
 README Updated on:
 	2015-10-06
+
+

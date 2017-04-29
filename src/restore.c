@@ -26,7 +26,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <libimobiledevice/restore.h>
-#include <zip.h>
+#include "zip.h"
 #include <libirecovery.h>
 
 #include "idevicerestore.h"
@@ -38,6 +38,7 @@
 #include "ipsw.h"
 #include "restore.h"
 #include "common.h"
+#include "pzip.h"
 
 #define CREATE_PARTITION_MAP          11
 #define CREATE_FILESYSTEM             12
@@ -83,6 +84,9 @@
 #define UPDATE_SWDHID                 56
 #define UPDATE_S3E_FIRMWARE           58
 #define UPDATE_SE_FIRMWARE            59
+
+plist_t build_identity2;
+plist_t buildmanifest2;
 
 static int restore_finished = 0;
 
@@ -1037,9 +1041,9 @@ int restore_send_nor(restored_client_t restore, struct idevicerestore_client_t* 
 			error("ERROR: Unable to extract component: %s\n", component);
 			return -1;
 		}
+		free(comppath);
 
 		if (personalize_component(component, component_data, component_size, client->tss, &nor_data, &nor_size) < 0) {
-			free(comppath);
 			free(component_data);
 			plist_free(firmware_files);
 			error("ERROR: Unable to get personalized component: %s\n", component);
@@ -1050,13 +1054,12 @@ int restore_send_nor(restored_client_t restore, struct idevicerestore_client_t* 
 		component_size = 0;
 
 		/* make sure iBoot is the first entry in the array */
-		if (!strncmp("iBoot", filename, 5)) {
+		if (!strncmp("iBoot", filename, 4)) {
 			plist_array_insert_item(norimage_array, plist_new_data((char*)nor_data, (uint64_t)nor_size), 0);
 		} else {
 			plist_array_append_item(norimage_array, plist_new_data((char*)nor_data, (uint64_t)nor_size));
 		}
 
-		free(comppath);
 		free(nor_data);
 		nor_data = NULL;
 		nor_size = 0;
@@ -1365,7 +1368,7 @@ static int restore_sign_bbfw(const char* bbfwtmp, plist_t bbtss, const unsigned 
 				}
 			}
 		}
-		if (!keep) {
+		if (!keep && is_fls) {
 			zip_delete(za, i);
 		}
 	}
@@ -1503,7 +1506,7 @@ leave:
 	return res;
 }
 
-int restore_send_baseband_data(restored_client_t restore, struct idevicerestore_client_t* client, plist_t build_identity, plist_t message)
+int restore_send_baseband_data(restored_client_t restore, struct idevicerestore_client_t* client, plist_t build_identity2, plist_t message)
 {
 	int res = -1;
 	uint64_t bb_cert_id = 0;
@@ -1516,6 +1519,7 @@ int restore_send_baseband_data(restored_client_t restore, struct idevicerestore_
 	char* buffer = NULL;
 	char* bbfwtmp = NULL;
 	plist_t dict = NULL;
+	plist_t buildmanifest2 = NULL;
 
 	info("About to send BasebandData...\n");
 
@@ -1523,6 +1527,70 @@ int restore_send_baseband_data(restored_client_t restore, struct idevicerestore_
 
 	// setup request data
 	plist_t arguments = plist_dict_get_item(message, "Arguments");
+	if (client->flags & FLAG_RERESTORE) {
+		FILE *ofp = fopen(client->otamanifest,"rb");
+		struct stat *ostat = (struct stat*) malloc(sizeof(struct stat));
+		stat(client->otamanifest, ostat);
+		char *opl = (char *)malloc(sizeof(char) *(ostat->st_size +1));
+		fread(opl, sizeof(char), ostat->st_size, ofp);
+		fclose(ofp);
+		
+		if (!memcmp(opl, "bplist00", 8))
+			plist_from_bin(opl, ostat->st_size, &buildmanifest2);
+		else
+			plist_from_xml(opl, ostat->st_size, &buildmanifest2);
+		free(ostat);
+		const char *device = client->device->product_type;
+		
+		int indexCount = -1;
+		
+		if (client->flags & FLAG_RERESTORE) {
+			
+			if (!strcmp(device, "iPhone5,2"))
+				indexCount = 0;
+			
+			else if (!strcmp(device, "iPhone5,4"))
+				indexCount = 2;
+			
+			else if (!strcmp(device, "iPhone5,1"))
+				indexCount = 4;
+			
+			else if (!strcmp(device, "iPhone5,3"))
+				indexCount = 6;
+			
+			if (indexCount == -1) {
+				if (!strcmp(device, "iPad3,5"))
+					indexCount = 0;
+				else if (!strcmp(device, "iPad3,6"))
+					indexCount = 2;
+				else if (!strcmp(device, "iPad3,4"))
+					indexCount = 4;
+			}
+		}
+		
+		plist_t node = NULL;
+		char *version = 0;
+		char *build = 0;
+		node = plist_dict_get_item(buildmanifest2, "ProductVersion");
+		plist_get_string_val(node, &version);
+		
+		node = plist_dict_get_item(buildmanifest2, "ProductBuildVersion");
+		plist_get_string_val(node, &build);
+		
+		unsigned long major = strtoul(build, NULL, 10);
+		
+		if (major == 14 && indexCount == -1) {
+			printf("Error parsing BuildManifest.\n");
+			exit(-1);
+		}
+		else if (major == 14)
+			build_identity2 = build_manifest_get_build_identity(buildmanifest2, indexCount);
+		else build_identity2 = build_manifest_get_build_identity(buildmanifest2, 0);
+		
+		//free(opl);
+		
+		//free(opl);
+	}
 	if (arguments && plist_get_node_type(arguments) == PLIST_DICT) {
 		plist_t bb_chip_id_node = plist_dict_get_item(arguments, "ChipID");
 		if (bb_chip_id_node && plist_get_node_type(bb_chip_id_node) == PLIST_UINT) {
@@ -1553,10 +1621,73 @@ int restore_send_baseband_data(restored_client_t restore, struct idevicerestore_
 		plist_dict_set_item(parameters, "BbGoldCertId", plist_new_uint(bb_cert_id));
 		plist_dict_set_item(parameters, "BbSNUM", plist_new_data((const char*)bb_snum, bb_snum_size));
 
-		tss_parameters_add_from_manifest(parameters, build_identity);
+		tss_parameters_add_from_manifest(parameters, build_identity2);
 
 		/* create baseband request */
 		plist_t request = tss_request_new(NULL);
+		if (client->flags & FLAG_RERESTORE) {
+			FILE *ofp = fopen(client->otamanifest,"rb");
+			struct stat *ostat = (struct stat*) malloc(sizeof(struct stat));
+			stat(client->otamanifest, ostat);
+			char *opl = (char *)malloc(sizeof(char) *(ostat->st_size +1));
+			fread(opl, sizeof(char), ostat->st_size, ofp);
+			fclose(ofp);
+			
+			if (memcmp(opl, "bplist00", 8) == 0)
+				plist_from_bin(opl, ostat->st_size, &buildmanifest2);
+			else
+				plist_from_xml(opl, ostat->st_size, &buildmanifest2);
+			free(ostat);
+			const char *device = client->device->product_type;
+			
+			int indexCount = -1;
+			
+			if (!strcmp(device, "iPhone5,2"))
+				indexCount = 0;
+			
+			else if (!strcmp(device, "iPhone5,4"))
+				indexCount = 2;
+			
+			else if (!strcmp(device, "iPhone5,1"))
+				indexCount = 4;
+			
+			else if (!strcmp(device, "iPhone5,3"))
+				indexCount = 6;
+			
+			if (indexCount == -1) {
+				if (!strcmp(device, "iPad3,5"))
+					indexCount = 0;
+				else if (!strcmp(device, "iPad3,6"))
+					indexCount = 2;
+				else if (!strcmp(device, "iPad3,4"))
+					indexCount = 4;
+			}
+			
+			
+			plist_t node = NULL;
+			char *version = 0;
+			char *build = 0;
+			node = plist_dict_get_item(buildmanifest2, "ProductVersion");
+			plist_get_string_val(node, &version);
+			
+			node = plist_dict_get_item(buildmanifest2, "ProductBuildVersion");
+			plist_get_string_val(node, &build);
+			
+			unsigned long major = strtoul(build, NULL, 10);
+			
+			if (major == 14 && indexCount == -1) {
+				printf("Error parsing BuildManifest.\n");
+				exit(-1);
+			}
+			else if (major == 14)
+				build_identity2 = build_manifest_get_build_identity(buildmanifest2, indexCount);
+			else build_identity2 = build_manifest_get_build_identity(buildmanifest2, 0);
+			
+			//free(opl);
+			
+			//free(opl);
+		}
+		
 		if (request == NULL) {
 			error("ERROR: Unable to create Baseband TSS request\n");
 			plist_free(parameters);
@@ -1565,9 +1696,70 @@ int restore_send_baseband_data(restored_client_t restore, struct idevicerestore_
 
 		/* add baseband parameters */
 		tss_request_add_common_tags(request, parameters, NULL);
+		//tss_request_add_ap_tags(request, parameters, NULL);
+		
+		if (client->image4supported)
+			plist_dict_set_item(request, "@ApImg4Ticket", plist_new_bool(0));
+		else
+			plist_dict_set_item(request, "@APTicket", plist_new_bool(0));
+		
 		tss_request_add_baseband_tags(request, parameters, NULL);
 
-		plist_t node = plist_access_path(build_identity, 2, "Info", "FDRSupport");
+		plist_t node = plist_access_path(build_identity2, 2, "Info", "FDRSupport");
+		if (client->flags & FLAG_RERESTORE) {
+			FILE *ofp = fopen(client->otamanifest,"rb");
+			struct stat *ostat = (struct stat*) malloc(sizeof(struct stat));
+			stat(client->otamanifest, ostat);
+			char *opl = (char *)malloc(sizeof(char) *(ostat->st_size +1));
+			fread(opl, sizeof(char), ostat->st_size, ofp);
+			fclose(ofp);
+			
+			if (memcmp(opl, "bplist00", 8) == 0)
+				plist_from_bin(opl, ostat->st_size, &buildmanifest2);
+			else
+				plist_from_xml(opl, ostat->st_size, &buildmanifest2);
+			free(ostat);
+			
+			const char *device = client->device->product_type;
+			
+			int indexCount = -1;
+			
+			if (client->flags & FLAG_RERESTORE) {
+				
+				if (!strcmp(device, "iPhone5,2") || !strcmp(device, "iPad3,5"))
+					indexCount = 0;
+				
+				else if (!strcmp(device, "iPhone5,4") || !strcmp(device, "iPad3,6"))
+					indexCount = 2;
+				
+				else if (!strcmp(device, "iPhone5,1") || !strcmp(device, "iPad3,4"))
+					indexCount = 4;
+				
+				else if (!strcmp(device, "iPhone5,3"))
+					indexCount = 6;
+			}
+			
+			plist_t node = NULL;
+			char *version = 0;
+			char *build = 0;
+			node = plist_dict_get_item(buildmanifest2, "ProductVersion");
+			plist_get_string_val(node, &version);
+			
+			node = plist_dict_get_item(buildmanifest2, "ProductBuildVersion");
+			plist_get_string_val(node, &build);
+			
+			unsigned long major = strtoul(build, NULL, 10);
+			
+			if (major == 14 && indexCount == -1) {
+				printf("Error parsing BuildManifest.\n");
+				exit(-1);
+			}
+			else if (major == 14)
+				build_identity2 = build_manifest_get_build_identity(buildmanifest2, indexCount);
+			else build_identity2 = build_manifest_get_build_identity(buildmanifest2, 0);
+			
+			//free(opl);
+		}
 		if (node && plist_get_node_type(node) == PLIST_BOOLEAN) {
 			uint8_t b = 0;
 			plist_get_bool_val(node, &b);
@@ -1594,7 +1786,60 @@ int restore_send_baseband_data(restored_client_t restore, struct idevicerestore_
 	}
 
 	// get baseband firmware file path from build identity
-	plist_t bbfw_path = plist_access_path(build_identity, 4, "Manifest", "BasebandFirmware", "Info", "Path");
+	plist_t bbfw_path = plist_access_path(build_identity2, 4, "Manifest", "BasebandFirmware", "Info", "Path");
+	if (client->flags & FLAG_RERESTORE) {
+		FILE *ofp = fopen(client->otamanifest,"rb");
+		struct stat *ostat = (struct stat*) malloc(sizeof(struct stat));
+		stat(client->otamanifest, ostat);
+		char *opl = (char *)malloc(sizeof(char) *(ostat->st_size +1));
+		fread(opl, sizeof(char), ostat->st_size, ofp);
+		fclose(ofp);
+		
+		if (memcmp(opl, "bplist00", 8) == 0)
+			plist_from_bin(opl, ostat->st_size, &buildmanifest2);
+		else
+			plist_from_xml(opl, ostat->st_size, &buildmanifest2);
+		free(ostat);
+		const char *device = client->device->product_type;
+		
+		int indexCount = -1;
+		
+		if (client->flags & FLAG_RERESTORE) {
+			
+			if (!strcmp(device, "iPhone5,2") || !strcmp(device, "iPad3,5"))
+				indexCount = 0;
+			
+			else if (!strcmp(device, "iPhone5,4") || !strcmp(device, "iPad3,6"))
+				indexCount = 2;
+			
+			else if (!strcmp(device, "iPhone5,1") || !strcmp(device, "iPad3,4"))
+				indexCount = 4;
+			
+			else if (!strcmp(device, "iPhone5,3"))
+				indexCount = 6;
+		}
+		
+		plist_t node = NULL;
+		char *version = 0;
+		char *build = 0;
+		node = plist_dict_get_item(buildmanifest2, "ProductVersion");
+		plist_get_string_val(node, &version);
+		
+		node = plist_dict_get_item(buildmanifest2, "ProductBuildVersion");
+		plist_get_string_val(node, &build);
+		
+		unsigned long major = strtoul(build, NULL, 10);
+		
+		if (major == 14 && indexCount == -1) {
+			printf("Error parsing BuildManifest.\n");
+			exit(-1);
+		}
+		else if (major == 14)
+			build_identity2 = build_manifest_get_build_identity(buildmanifest2, indexCount);
+		else build_identity2 = build_manifest_get_build_identity(buildmanifest2, 0);
+		//free(opl);
+	}
+	
 	if (!bbfw_path || plist_get_node_type(bbfw_path) != PLIST_STRING) {
 		error("ERROR: Unable to get BasebandFirmware/Info/Path node\n");
 		plist_free(response);
@@ -1608,16 +1853,33 @@ int restore_send_baseband_data(restored_client_t restore, struct idevicerestore_
 		return -1;
 	}
 
+	char* fwurl = NULL;
+	unsigned char isha1[20];
+	
+	if ((ipsw_get_latest_fw(client->version_data, client->device->product_type, &fwurl, isha1) < 0) || !fwurl) {
+		error("ERROR: can't get URL for latest firmware\n");
+		return -1;
+	}
+	
+	
 	// extract baseband firmware to temp file
-	bbfwtmp = tempnam(NULL, client->udid);
+	//bbfwtmp = tempnam(NULL, client->udid);
+	bbfwtmp = "bbfw.tmp";
+	
 	if (!bbfwtmp) {
 		error("WARNING: Could not generate temporary filename, using bbfw.tmp\n");
 		bbfwtmp = strdup("bbfw.tmp");
 	}
-	if (ipsw_extract_to_file(client->ipsw, bbfwpath, bbfwtmp) != 0) {
-		error("ERROR: Unable to extract baseband firmware from ipsw\n");
-		plist_free(response);
-		return -1;
+	
+	partialZip(fwurl, bbfwpath, "bbfw.tmp");
+	
+	
+	if (!client->flags & FLAG_RERESTORE) {
+		if (ipsw_extract_to_file(client->ipsw, bbfwpath, bbfwtmp) != 0) {
+			error("ERROR: Unable to extract baseband firmware from ipsw\n");
+			plist_free(response);
+			return -1;
+		}
 	}
 
 	if (bb_nonce && !client->restore->bbtss) {
@@ -1658,8 +1920,8 @@ leave:
 	plist_free(dict);
 	free(buffer);
 	if (bbfwtmp) {
-		remove(bbfwtmp);
-		free(bbfwtmp);
+		//remove(bbfwtmp);
+		//free(bbfwtmp);
 	}
 	plist_free(response);
 
@@ -1980,7 +2242,7 @@ int restore_handle_data_request_msg(struct idevicerestore_client_t* client, idev
 		}
 
 		else if (!strcmp(type, "BasebandData")) {
-			if(restore_send_baseband_data(restore, client, build_identity, message) < 0) {
+			if(restore_send_baseband_data(restore, client, (client->basebandBuildIdentity) ? client->basebandBuildIdentity : build_identity, message) < 0) {
 				error("ERROR: Unable to send baseband data\n");
 				return -1;
 			}
@@ -2074,6 +2336,7 @@ int restore_device(struct idevicerestore_client_t* client, plist_t build_identit
 	}
 
 	restore_error = restored_query_value(restore, "SavedDebugInfo", &hwinfo);
+    node = NULL;
 	if (restore_error == RESTORE_E_SUCCESS) {
 		char* sval = NULL;
 

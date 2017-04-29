@@ -181,6 +181,12 @@ int dfu_send_component(struct idevicerestore_client_t* client, plist_t build_ide
 	free(component_data);
 	component_data = NULL;
 
+	/* Using cached blobs is only available with 32-bit devices. */
+	if (client->image4supported & FLAG_RERESTORE) {
+		error("ERROR: Re-Restoring is only supported on 32-bit devices.\n");
+		exit(-1);
+	}
+
 	if (!client->image4supported && client->build_major > 8 && !(client->flags & FLAG_CUSTOM) && !strcmp(component, "iBEC")) {
 		unsigned char* ticket = NULL;
 		unsigned int tsize = 0;

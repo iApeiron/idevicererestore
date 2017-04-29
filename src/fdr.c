@@ -33,7 +33,7 @@
 #include "common.h"
 #include "idevicerestore.h"
 #include "fdr.h"
-#include <endianness.h> /* from libimobiledevice */
+#include "endianness.h" /* from libimobiledevice */
 
 #define CTRL_PORT 0x43a /*1082*/
 #define CTRLCMD  "BeginCtrl"

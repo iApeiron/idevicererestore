@@ -21,6 +21,14 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+#define TMP_PATH "/tmp"
+#define IDEVICERERESTORE_TMP_PATH TMP_PATH"/idevicererestore"
+
+#define BASEBAND_TMP_PATH IDEVICERERESTORE_TMP_PATH"/baseband.bbfw"
+#define BASEBAND_MANIFEST_TMP_PATH IDEVICERERESTORE_TMP_PATH"/basebandManifest.plist"
+
+char* _basebandPath;
+
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -48,12 +56,15 @@
 #include "download.h"
 #include "recovery.h"
 #include "idevicerestore.h"
+#include "pzip.h"
 
 #include "limera1n.h"
 
 #include "locking.h"
 
 #define VERSION_XML "version.xml"
+
+plist_t _basebandbuildmanifest;
 
 #ifndef IDEVICERESTORE_NOMAIN
 static struct option longopts[] = {
@@ -70,6 +81,8 @@ static struct option longopts[] = {
 	{ "keep-pers", no_argument,     NULL, 'k' },
 	{ "pwn",     no_argument,       NULL, 'p' },
 	{ "no-action", no_argument,     NULL, 'n' },
+	{ "rerestore",    no_argument,       NULL, 'r' },
+	{ "ota",        required_argument, NULL, 'o' },
 	{ "cache-path", required_argument, NULL, 'C' },
 	{ NULL, 0, NULL, 0 }
 };
@@ -86,6 +99,7 @@ void usage(int argc, char* argv[]) {
 	printf("  -h, --help\t\tprints usage information\n");
 	printf("  -e, --erase\t\tperform a full restore, erasing all data (defaults to update)\n");
 	printf("  -c, --custom\t\trestore with a custom firmware\n");
+	printf("  -r, --rerestore\ttake advantage of the 9.x 32 bit re-restore bug\n");
 	printf("  -l, --latest\t\tuse latest available firmware (with download on demand)\n");
 	printf("              \t\tDO NOT USE if you need to preserve the baseband (unlock)!\n");
 	printf("              \t\tUSE WITH CARE if you want to keep a jailbreakable firmware!\n");
@@ -100,7 +114,7 @@ void usage(int argc, char* argv[]) {
 	printf("  -C, --cache-path DIR\tUse specified directory for caching extracted\n");
 	printf("                      \tor other reused files.\n");
 	printf("\n");
-	printf("Homepage: <" PACKAGE_URL ">\n");
+	//printf("Homepage: <" PACKAGE_URL ">\n");
 }
 #endif
 
@@ -202,7 +216,11 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 	load_version_data(client);
 
 	// check which mode the device is currently in so we know where to start
-	if (check_mode(client) < 0) {
+
+	
+
+	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+	if (check_mode(client) < 0 || ((client->flags & FLAG_RERESTORE) && client->mode->index != MODE_DFU && client->mode->index !=MODE_RECOVERY)) {
 		error("ERROR: Unable to discover device mode. Please make sure a device is attached.\n");
 		return -1;
 	}
@@ -216,7 +234,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			error("ERROR: Could not open device in WTF mode\n");
 			return -1;
 		}
-		if ((dfu_get_cpid(client, &cpid) < 0) || (cpid == 0)) { 
+		if ((dfu_get_cpid(client, &cpid) < 0) || (cpid == 0)) {
 			error("ERROR: Could not get CPID for WTF mode device\n");
 			dfu_client_free(client);
 			return -1;
@@ -560,6 +578,9 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		}
 	}
 
+	plist_t buildmanifest2 = NULL;
+	plist_t build_identity2 = NULL;
+
 	/* print information about current build identity */
 	build_identity_print_information(build_identity);
 
@@ -745,7 +766,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			remove(tmpf);
 			rename(filesystem, tmpf);
 			free(filesystem);
-			filesystem = strdup(tmpf); 
+			filesystem = strdup(tmpf);
 		}
 	}
 
@@ -823,6 +844,75 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		sleep(7);
 	}
 	idevicerestore_progress(client, RESTORE_STEP_PREPARE, 0.5);
+
+	if (client->flags & FLAG_RERESTORE) {
+		char* fwurl = NULL;
+		unsigned char isha1[20];
+
+		if ((ipsw_get_latest_fw(client->version_data, client->device->product_type, &fwurl, isha1) < 0) || !fwurl) {
+			error("ERROR: can't get URL for latest firmware\n");
+			return -1;
+		}
+
+		partialZip(fwurl, "BuildManifest.plist", "BuildManifest_New.plist");
+		client->otamanifest = "BuildManifest_New.plist";
+
+		FILE *ofp = fopen(client->otamanifest,"rb");
+		struct stat *ostat = (struct stat*) malloc(sizeof(struct stat));
+		stat(client->otamanifest, ostat);
+		char *opl = (char *)malloc(sizeof(char) *(ostat->st_size +1));
+		fread(opl, sizeof(char), ostat->st_size, ofp);
+		fclose(ofp);
+
+		if (memcmp(opl, "bplist00", 8) == 0)
+			plist_from_bin(opl, (uint32_t)ostat->st_size, &buildmanifest2);
+		else
+			plist_from_xml(opl, (uint32_t)ostat->st_size, &buildmanifest2);
+		free(ostat);
+		const char *device = client->device->product_type;
+		printf("Device: %s\n", device);
+
+		int indexCount = -1;
+
+		if (!strcmp(device, "iPhone5,2") || !strcmp(device, "iPad3,5"))
+			indexCount = 0;
+
+		else if (!strcmp(device, "iPhone5,4") || !strcmp(device, "iPad3,6"))
+			indexCount = 2;
+
+		else if (!strcmp(device, "iPhone5,1") || !strcmp(device, "iPad3,4"))
+			indexCount = 4;
+
+		else if (!strcmp(device, "iPhone5,3"))
+			indexCount = 6;
+
+		plist_t node = NULL;
+		char *version = 0;
+		char *build = 0;
+		node = plist_dict_get_item(buildmanifest2, "ProductVersion");
+		plist_get_string_val(node, &version);
+
+		node = plist_dict_get_item(buildmanifest2, "ProductBuildVersion");
+		plist_get_string_val(node, &build);
+
+		unsigned long major = strtoul(build, NULL, 10);
+
+		if (major == 14 && indexCount == -1) {
+			printf("Error parsing BuildManifest.\n");
+			exit(-1);
+		}
+		else if (major == 14)
+			build_identity2 = build_manifest_get_build_identity(buildmanifest2, indexCount);
+		else build_identity2 = build_manifest_get_build_identity(buildmanifest2, 0);
+		//free(opl);
+
+		char* bbfwpath = NULL;
+		plist_t bbfw_path = plist_access_path(build_identity2, 4, "Manifest", "BasebandFirmware", "Info", "Path");
+		if (bbfw_path || plist_get_node_type(bbfw_path) != PLIST_STRING) {
+			plist_get_string_val(bbfw_path, &bbfwpath);
+			partialZip(fwurl, bbfwpath, "bbfw.tmp");
+		}
+	}
 
 	if (!client->image4supported && (client->build_major > 8)) {
 		// we need another tss request with nonce.
@@ -1046,6 +1136,15 @@ void idevicerestore_set_progress_callback(struct idevicerestore_client_t* client
 
 #ifndef IDEVICERESTORE_NOMAIN
 int main(int argc, char* argv[]) {
+
+	
+
+	//client->version_data, client->device->product_type, client->cache_dir, &ipsw
+
+
+	// partialZip(<#char *url#>, <#char *desiredFile#>, <#char *outFile#>)
+
+	//exit(1);
 	int opt = 0;
 	int optindex = 0;
 	char* ipsw = NULL;
@@ -1057,7 +1156,7 @@ int main(int argc, char* argv[]) {
 		return -1;
 	}
 
-	while ((opt = getopt_long(argc, argv, "dhcesxtpli:u:nC:k", longopts, &optindex)) > 0) {
+	while ((opt = getopt_long(argc, argv, "dhcersxtplio:u:nC:k", longopts, &optindex)) > 0) {
 		switch (opt) {
 		case 'h':
 			usage(argc, argv);
@@ -1073,6 +1172,10 @@ int main(int argc, char* argv[]) {
 
 		case 'c':
 			client->flags |= FLAG_CUSTOM;
+			break;
+
+		case 'r':
+			client->flags |= FLAG_ERASE | FLAG_RERESTORE;
 			break;
 
 		case 's':
@@ -1470,7 +1573,7 @@ int get_tss_response(struct idevicerestore_client_t* client, plist_t build_ident
 	plist_t response = NULL;
 	*tss = NULL;
 
-	if ((client->build_major <= 8) || (client->flags & FLAG_CUSTOM)) {
+	if ((client->build_major <= 8) || (client->flags & (FLAG_CUSTOM | FLAG_RERESTORE))) {
 		error("checking for local shsh\n");
 
 		/* first check for local copy */
@@ -1526,10 +1629,15 @@ int get_tss_response(struct idevicerestore_client_t* client, plist_t build_ident
 	}
 
 	if (*tss) {
-		info("Using cached SHSH\n");
+		info("Using local SHSH\n");
 		return 0;
+	}
+
+	else if (client->flags & FLAG_RERESTORE) {
+		info("No local blobs found, checking Cydia TSS server for SHSH blobs\n");
+		client->tss_url = strdup("http://cydia.saurik.com/TSS/controller?action=2");
 	} else {
-		info("Trying to fetch new SHSH blob\n");
+		info("Trying to fetch new SHSH blob from Apple\n");
 	}
 
 	/* populate parameters */
@@ -1638,6 +1746,7 @@ int get_tss_response(struct idevicerestore_client_t* client, plist_t build_ident
 	}
 
 	info("Received SHSH blobs\n");
+	client->tss_url = strdup("http://gs.apple.com/TSS/controller?action=2");
 
 	plist_free(request);
 	plist_free(parameters);
@@ -1929,6 +2038,6 @@ const char* get_component_name(const char* filename) {
 		return "RestoreSEP";
 	} else {
 		error("WARNING: Unhandled component '%s'", filename);
-		return NULL;
+		return filename;
 	}
 }

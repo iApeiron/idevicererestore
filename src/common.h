@@ -74,8 +74,11 @@ struct idevicerestore_entry_t {
 };
 
 struct idevicerestore_client_t {
+	char* bbfwtmp;
 	int flags;
+	char* otamanifest;
 	plist_t tss;
+	plist_t basebandBuildIdentity;
 	char* tss_url;
 	plist_t version_data;
 	uint64_t ecid;

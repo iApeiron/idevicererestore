@@ -33,6 +33,7 @@ extern "C" {
 #include <libimobiledevice/libimobiledevice.h>
 
 struct restore_client_t {
+	char* bbfwtmp;
 	plist_t tss;
 	plist_t bbtss;
 	idevice_t device;
