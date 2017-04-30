@@ -1,8 +1,7 @@
-#ifndef PARTIAL_H
-#define PARTIAL_H
-//#include "partial.h"
-#include "include/common.h"
+#ifndef LIBPARTIAL_H
+#define LIBPARTIAL_H
+#include "partial.h"
 
-int partialZip(char *url, char *desiredFile, char *outFile);
+int partialzip_download_file(const char* url, const char* path, const char* output);
 
 #endif
