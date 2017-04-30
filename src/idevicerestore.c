@@ -21,14 +21,6 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#define TMP_PATH "/tmp"
-#define IDEVICERERESTORE_TMP_PATH TMP_PATH"/idevicererestore"
-
-#define BASEBAND_TMP_PATH IDEVICERERESTORE_TMP_PATH"/baseband.bbfw"
-#define BASEBAND_MANIFEST_TMP_PATH IDEVICERERESTORE_TMP_PATH"/basebandManifest.plist"
-
-char* _basebandPath;
-
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -64,8 +56,6 @@ char* _basebandPath;
 
 #define VERSION_XML "version.xml"
 
-plist_t _basebandbuildmanifest;
-
 #ifndef IDEVICERESTORE_NOMAIN
 static struct option longopts[] = {
 	{ "ecid",    required_argument, NULL, 'i' },
@@ -82,7 +72,6 @@ static struct option longopts[] = {
 	{ "pwn",     no_argument,       NULL, 'p' },
 	{ "no-action", no_argument,     NULL, 'n' },
 	{ "rerestore",    no_argument,       NULL, 'r' },
-	{ "ota",        required_argument, NULL, 'o' },
 	{ "cache-path", required_argument, NULL, 'C' },
 	{ NULL, 0, NULL, 0 }
 };
@@ -1156,7 +1145,7 @@ int main(int argc, char* argv[]) {
 		return -1;
 	}
 
-	while ((opt = getopt_long(argc, argv, "dhcersxtplio:u:nC:k", longopts, &optindex)) > 0) {
+	while ((opt = getopt_long(argc, argv, "dhcersxtpli:u:nC:k", longopts, &optindex)) > 0) {
 		switch (opt) {
 		case 'h':
 			usage(argc, argv);
