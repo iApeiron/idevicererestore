@@ -631,7 +631,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 					strcpy(zfn, "shsh");
 				}
 				mkdir_with_parents(zfn, 0755);
-				sprintf(zfn+strlen(zfn), "/" FMT_qu "-%s-%s.shsh", (long long int)client->ecid, client->device->product_type, client->version);
+				sprintf(zfn+strlen(zfn), "/" FMT_qu "-%s-%s-%s.shsh", (long long int)client->ecid, client->device->product_type, client->version, client->build);
 				struct stat fst;
 				if (stat(zfn, &fst) != 0) {
 					gzFile zf = gzopen(zfn, "wb");
@@ -1569,9 +1569,9 @@ int get_tss_response(struct idevicerestore_client_t* client, plist_t build_ident
 		char zfn[1024];
 		if (client->version) {
 			if (client->cache_dir) {
-				sprintf(zfn, "%s/shsh/" FMT_qu "-%s-%s.shsh", client->cache_dir, (long long int)client->ecid, client->device->product_type, client->version);
+				sprintf(zfn, "%s/shsh/" FMT_qu "-%s-%s-%s.shsh", client->cache_dir, (long long int)client->ecid, client->device->product_type, client->version, client->build);
 			} else {
-				sprintf(zfn, "shsh/" FMT_qu "-%s-%s.shsh", (long long int)client->ecid, client->device->product_type, client->version);
+				sprintf(zfn, "shsh/" FMT_qu "-%s-%s-%s.shsh", (long long int)client->ecid, client->device->product_type, client->version, client->build);
 			}
 			struct stat fst;
 			if (stat(zfn, &fst) == 0) {
