@@ -843,7 +843,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			return -1;
 		}
 
-		partialZip(fwurl, "BuildManifest.plist", "BuildManifest_New.plist");
+		partialzip_download_file(fwurl, "BuildManifest.plist", "BuildManifest_New.plist");
 		client->otamanifest = "BuildManifest_New.plist";
 
 		FILE *ofp = fopen(client->otamanifest,"rb");
@@ -899,7 +899,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		plist_t bbfw_path = plist_access_path(build_identity2, 4, "Manifest", "BasebandFirmware", "Info", "Path");
 		if (bbfw_path || plist_get_node_type(bbfw_path) != PLIST_STRING) {
 			plist_get_string_val(bbfw_path, &bbfwpath);
-			partialZip(fwurl, bbfwpath, "bbfw.tmp");
+			partialzip_download_file(fwurl, bbfwpath, "bbfw.tmp");
 		}
 	}
 

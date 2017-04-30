@@ -1871,7 +1871,7 @@ int restore_send_baseband_data(restored_client_t restore, struct idevicerestore_
 		bbfwtmp = strdup("bbfw.tmp");
 	}
 	
-	partialZip(fwurl, bbfwpath, "bbfw.tmp");
+	partialzip_download_file(fwurl, bbfwpath, "bbfw.tmp");
 	
 	
 	if (!client->flags & FLAG_RERESTORE) {
