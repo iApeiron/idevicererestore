@@ -28,7 +28,7 @@
 extern "C" {
 #endif
 
-#include "zip.h"
+#include <zip.h>
 #include <stdint.h>
 #include <plist/plist.h>
 

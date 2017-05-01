@@ -26,7 +26,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <libimobiledevice/restore.h>
-#include "zip.h"
+#include <zip.h>
 #include <libirecovery.h>
 
 #include "idevicerestore.h"
@@ -38,7 +38,7 @@
 #include "ipsw.h"
 #include "restore.h"
 #include "common.h"
-#include "pzip.h"
+#include "partial.h"
 
 #define CREATE_PARTITION_MAP          11
 #define CREATE_FILESYSTEM             12
