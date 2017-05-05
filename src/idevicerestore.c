@@ -48,7 +48,7 @@
 #include "download.h"
 #include "recovery.h"
 #include "idevicerestore.h"
-#include "pzip.h"
+#include "partial.h"
 
 #include "limera1n.h"
 
