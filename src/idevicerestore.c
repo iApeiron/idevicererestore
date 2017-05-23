@@ -182,7 +182,19 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 	if (!client) {
 		return -1;
 	}
-
+	
+	char* install[50];
+	if (client->flags & FLAG_RERESTORE) {
+		printf("What type of blobs are you using? ('u' for update, 'e' for erase)\n");
+		scanf("%s", install);
+		if (*install == 'e') {
+			printf("Erase install chosen.\n");
+			client->flags |= FLAG_ERASE | FLAG_RERESTORE;
+		} else if (*install == 'u') {
+			printf("Update install chosen.\n");
+			client->flags |= FLAG_RERESTORE;
+		}
+	}
 	if ((client->flags & FLAG_LATEST) && (client->flags & FLAG_CUSTOM)) {
 		error("ERROR: FLAG_LATEST cannot be used with FLAG_CUSTOM.\n");
 		return -1;
@@ -383,6 +395,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 	}
 	idevicerestore_progress(client, RESTORE_STEP_DETECT, 0.8);
 
+
 	/* check if device type is supported by the given build manifest */
 	if (build_manifest_check_compatibility(buildmanifest, client->device->product_type) < 0) {
 		error("ERROR: Could not make sure this firmware is suitable for the current device. Refusing to continue.\n");
@@ -398,6 +411,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 	client->image4supported = is_image4_supported(client);
 	info("Device supports Image4: %s\n", (client->image4supported) ? "true" : "false");
 
+	
 	if (client->flags & FLAG_CUSTOM) {
 		/* prevent signing custom firmware */
 		tss_enabled = 0;
@@ -588,7 +602,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			return -1;
 		}
 		info("Found ECID " FMT_qu "\n", (long long unsigned int)client->ecid);
-
+        
 		if (client->build_major > 8) {
 			unsigned char* nonce = NULL;
 			int nonce_size = 0;
@@ -1160,7 +1174,7 @@ int main(int argc, char* argv[]) {
 			break;
 
 		case 'r':
-			client->flags |= FLAG_ERASE | FLAG_RERESTORE | FLAG_DEBUG;
+			client->flags |= FLAG_RERESTORE | FLAG_DEBUG;
 			break;
 
 		case 's':
