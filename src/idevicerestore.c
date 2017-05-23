@@ -190,7 +190,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		if (*install == 'e') {
 			printf("Erase install chosen.\n");
 			client->flags |= FLAG_ERASE | FLAG_RERESTORE;
-		} else if (*install == 'e') {
+		} else if (*install == 'u') {
 			printf("Update install chosen.\n");
 			client->flags |= FLAG_RERESTORE;
 		}
