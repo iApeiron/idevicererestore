@@ -209,13 +209,18 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 	
 
 	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-	if (check_mode(client) < 0 || ((client->flags & FLAG_RERESTORE) && client->mode->index != MODE_DFU && client->mode->index !=MODE_RECOVERY)) {
+	if (check_mode(client) < 0) {
 		error("ERROR: Unable to discover device mode. Please make sure a device is attached.\n");
 		return -1;
 	}
 	idevicerestore_progress(client, RESTORE_STEP_DETECT, 0.1);
-	info("Found device in %s mode\n", client->mode->string);
-
+	
+	if (client->mode->index == MODE_NORMAL) {
+		info("Found device in normal mode, going into recovery.\n");
+	} else {
+		info("Found device in %s mode\n", client->mode->string);
+	}
+	
 	if (client->mode->index == MODE_WTF) {
 		unsigned int cpid = 0;
 
@@ -695,7 +700,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 	}
 
 	if (stat(tmpf, &st) < 0) {
-		__mkdir(tmpf, 0755);
+		mkdir(tmpf, 0755);
 	}
 	strcat(tmpf, "/");
 	strcat(tmpf, fsname);
@@ -1125,15 +1130,6 @@ void idevicerestore_set_progress_callback(struct idevicerestore_client_t* client
 
 #ifndef IDEVICERESTORE_NOMAIN
 int main(int argc, char* argv[]) {
-
-	
-
-	//client->version_data, client->device->product_type, client->cache_dir, &ipsw
-
-
-	// partialZip(<#char *url#>, <#char *desiredFile#>, <#char *outFile#>)
-
-	//exit(1);
 	int opt = 0;
 	int optindex = 0;
 	char* ipsw = NULL;
@@ -1164,7 +1160,7 @@ int main(int argc, char* argv[]) {
 			break;
 
 		case 'r':
-			client->flags |= FLAG_ERASE | FLAG_RERESTORE;
+			client->flags |= FLAG_ERASE | FLAG_RERESTORE | FLAG_DEBUG;
 			break;
 
 		case 's':
