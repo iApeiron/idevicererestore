@@ -37,7 +37,7 @@
 
 int recovery_progress_callback(irecv_client_t client, const irecv_event_t* event) {
 	if (event->type == IRECV_PROGRESS) {
-		//print_progress_bar(event->progress);
+		print_progress_bar(event->progress);
 	}
 	return 0;
 }
@@ -350,18 +350,22 @@ int recovery_send_applelogo(struct idevicerestore_client_t* client, plist_t buil
 		return -1;
 	}
 
-	recovery_error = irecv_send_command(client->recovery->client, "bgcolor 0 0 0");
+	if (client->flags & FLAG_RERESTORE) {
+		recovery_error = irecv_send_command(client->recovery->client, "bgcolor 192 192 192");
+	} else {
+		recovery_error = irecv_send_command(client->recovery->client, "bgcolor 0 0 0");	
+	}
 	if (recovery_error != IRECV_E_SUCCESS) {
 		error("ERROR: Unable to display %s\n", component);
 		return -1;
 	}
     
-	/*
+	
 	if (client->flags & FLAG_RERESTORE) {
-		info("[WARNING] If your device is not currently showing an Apple logo, your APTicket may not work with this iOS build.\n");
+		info("[WARNING] If your device is not showing an Apple logo, then your APTicket may be incompatible.\n");
 		sleep(2);
 	}
-	*/
+	
 
 	return 0;
 }
