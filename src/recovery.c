@@ -349,24 +349,18 @@ int recovery_send_applelogo(struct idevicerestore_client_t* client, plist_t buil
 		error("ERROR: Unable to set %s\n", component);
 		return -1;
 	}
-
-	if (client->flags & FLAG_RERESTORE) {
-		recovery_error = irecv_send_command(client->recovery->client, "bgcolor 192 192 192");
-	} else {
-		recovery_error = irecv_send_command(client->recovery->client, "bgcolor 0 0 0");	
-	}
+	
+	recovery_error = irecv_send_command(client->recovery->client, "bgcolor 0 0 0");	
 	if (recovery_error != IRECV_E_SUCCESS) {
 		error("ERROR: Unable to display %s\n", component);
 		return -1;
 	}
     
-	
 	if (client->flags & FLAG_RERESTORE) {
 		info("[WARNING] If your device is not showing an Apple logo, then your APTicket may be incompatible.\n");
 		sleep(2);
 	}
 	
-
 	return 0;
 }
 
