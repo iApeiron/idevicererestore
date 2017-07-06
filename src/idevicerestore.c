@@ -195,6 +195,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			client->flags |= FLAG_RERESTORE;
 		}
 	}
+
 	if ((client->flags & FLAG_LATEST) && (client->flags & FLAG_CUSTOM)) {
 		error("ERROR: FLAG_LATEST cannot be used with FLAG_CUSTOM.\n");
 		return -1;
@@ -865,10 +866,10 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		partialzip_download_file(fwurl, "BuildManifest.plist", "BuildManifest_New.plist");
 		client->otamanifest = "BuildManifest_New.plist";
 
-		FILE *ofp = fopen(client->otamanifest,"rb");
+		FILE *ofp = fopen(client->otamanifest, "rb");
 		struct stat *ostat = (struct stat*) malloc(sizeof(struct stat));
 		stat(client->otamanifest, ostat);
-		char *opl = (char *)malloc(sizeof(char) *(ostat->st_size +1));
+		char *opl = (char *)malloc(sizeof(char) *(ostat->st_size + 1));
 		fread(opl, sizeof(char), ostat->st_size, ofp);
 		fclose(ofp);
 
@@ -914,11 +915,18 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		else build_identity2 = build_manifest_get_build_identity(buildmanifest2, 0);
 		//free(opl);
 
-		char* bbfwpath = NULL;
-		plist_t bbfw_path = plist_access_path(build_identity2, 4, "Manifest", "BasebandFirmware", "Info", "Path");
-		if (bbfw_path || plist_get_node_type(bbfw_path) != PLIST_STRING) {
-			plist_get_string_val(bbfw_path, &bbfwpath);
-			partialzip_download_file(fwurl, bbfwpath, "bbfw.tmp");
+		/* if the device being re-restored is different from the specified devices, download the baseband */
+		if (strcmp(device, "iPad2,1") || strcmp(device, "iPad2,4") || strcmp(device, "iPad2,5") || strcmp(device, "iPad3,4") || strcmp(device, "iPod5,1")) {
+			char* bbfwpath = NULL;
+			printf("Your device (%s) requires a baseband, downloading from Apple.\n", device);
+			plist_t bbfw_path = plist_access_path(build_identity2, 4, "Manifest", "BasebandFirmware", "Info", "Path");
+			if (bbfw_path || plist_get_node_type(bbfw_path) != PLIST_STRING) {
+				plist_get_string_val(bbfw_path, &bbfwpath);
+				partialzip_download_file(fwurl, bbfwpath, "bbfw.tmp");
+			}
+			else {
+				printf("Your device (%s) does not require a baseband, skipping baseband download.\n", device);
+			}
 		}
 	}
 
