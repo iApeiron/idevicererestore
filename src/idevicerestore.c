@@ -182,7 +182,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 	if (!client) {
 		return -1;
 	}
-	
+
 	char* install[50];
 	if (client->flags & FLAG_RERESTORE) {
 		printf("What type of blobs are you using? ('u' for update, 'e' for erase)\n");
@@ -190,7 +190,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		if (*install == 'e') {
 			printf("Erase install chosen.\n");
 			client->flags |= FLAG_ERASE | FLAG_RERESTORE;
-		} else if (*install == 'u') {
+		}
+		else if (*install == 'u') {
 			printf("Update install chosen.\n");
 			client->flags |= FLAG_RERESTORE;
 		}
@@ -219,7 +220,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 
 	// check which mode the device is currently in so we know where to start
 
-	
+
 
 	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 	if (check_mode(client) < 0) {
@@ -227,13 +228,14 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		return -1;
 	}
 	idevicerestore_progress(client, RESTORE_STEP_DETECT, 0.1);
-	
+
 	if (client->mode->index == MODE_NORMAL) {
 		info("Found device in normal mode, going into recovery.\n");
-	} else {
+	}
+	else {
 		info("Found device in %s mode\n", client->mode->string);
 	}
-	
+
 	if (client->mode->index == MODE_WTF) {
 		unsigned int cpid = 0;
 
@@ -270,7 +272,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			char* fnpart = strrchr(s_wtfurl, '/');
 			if (!fnpart) {
 				fnpart = (char*)"x12220000_5_Recovery.ipsw";
-			} else {
+			}
+			else {
 				fnpart++;
 			}
 			struct stat fst;
@@ -282,7 +285,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 				strcpy(wtfipsw, client->cache_dir);
 				strcat(wtfipsw, "/");
 				strcat(wtfipsw, fnpart);
-			} else {
+			}
+			else {
 				strcpy(wtfipsw, fnpart);
 			}
 			if (stat(wtfipsw, &fst) != 0) {
@@ -349,7 +353,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 				free(ipsw);
 			}
 			return res;
-		} else {
+		}
+		else {
 			client->ipsw = ipsw;
 		}
 	}
@@ -387,7 +392,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			error("ERROR: Unable to extract Restore.plist from %s. Firmware file might be corrupt.\n", client->ipsw);
 			return -1;
 		}
-	} else {
+	}
+	else {
 		info("Extracting BuildManifest from IPSW\n");
 		if (ipsw_extract_build_manifest(client->ipsw, &buildmanifest, &tss_enabled) < 0) {
 			error("ERROR: Unable to extract BuildManifest from %s. Firmware file might be corrupt.\n", client->ipsw);
@@ -412,7 +418,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 	client->image4supported = is_image4_supported(client);
 	info("Device supports Image4: %s\n", (client->image4supported) ? "true" : "false");
 
-	
+
 	if (client->flags & FLAG_CUSTOM) {
 		/* prevent signing custom firmware */
 		tss_enabled = 0;
@@ -480,7 +486,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 					if (!strncmp(files[x], "DeviceTree", 10)) {
 						plist_dict_set_item(manifest, "RestoreDeviceTree", plist_copy(comp));
 					}
-				} else {
+				}
+				else {
 					error("WARNING: unhandled component %s\n", files[x]);
 					plist_free(comp);
 				}
@@ -513,7 +520,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 				strncpy(tt, lcmodel, 3);
 				tt[3] = 0;
 				kdict = plist_dict_get_item(node, tt);
-			} else {
+			}
+			else {
 				// Populated in older iOS IPSWs
 				kdict = plist_dict_get_item(buildmanifest, "RestoreKernelCaches");
 			}
@@ -556,7 +564,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			plist_t os = plist_dict_get_item(node, "User");
 			if (!os) {
 				error("ERROR: missing filesystem in Restore.plist\n");
-			} else {
+			}
+			else {
 				inf = plist_new_dict();
 				plist_dict_set_item(inf, "Path", plist_copy(os));
 				comp = plist_new_dict();
@@ -573,14 +582,16 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			// finally add manifest
 			plist_dict_set_item(build_identity, "Manifest", manifest);
 		}
-	} else if (client->flags & FLAG_ERASE) {
+	}
+	else if (client->flags & FLAG_ERASE) {
 		build_identity = build_manifest_get_build_identity_for_model_with_restore_behavior(buildmanifest, client->device->hardware_model, "Erase");
 		if (build_identity == NULL) {
 			error("ERROR: Unable to find any build identities\n");
 			plist_free(buildmanifest);
 			return -1;
 		}
-	} else {
+	}
+	else {
 		build_identity = build_manifest_get_build_identity_for_model_with_restore_behavior(buildmanifest, client->device->hardware_model, "Update");
 		if (!build_identity) {
 			build_identity = build_manifest_get_build_identity_for_model(buildmanifest, client->device->hardware_model);
@@ -603,7 +614,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			return -1;
 		}
 		info("Found ECID " FMT_qu "\n", (long long unsigned int)client->ecid);
-        
+
 		if (client->build_major > 8) {
 			unsigned char* nonce = NULL;
 			int nonce_size = 0;
@@ -618,7 +629,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 				}
 				client->nonce = nonce;
 				client->nonce_size = nonce_size;
-			} else {
+			}
+			else {
 				free(nonce);
 			}
 		}
@@ -638,7 +650,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			error("ERROR: could not fetch TSS record\n");
 			plist_free(buildmanifest);
 			return -1;
-		} else {
+		}
+		else {
 			char *bin = NULL;
 			uint32_t blen = 0;
 			plist_to_bin(client->tss, &bin, &blen);
@@ -647,22 +660,25 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 				if (client->cache_dir) {
 					strcpy(zfn, client->cache_dir);
 					strcat(zfn, "/shsh");
-				} else {
+				}
+				else {
 					strcpy(zfn, "shsh");
 				}
 				mkdir_with_parents(zfn, 0755);
-				sprintf(zfn+strlen(zfn), "/" FMT_qu "-%s-%s-%s.shsh", (long long int)client->ecid, client->device->product_type, client->version, client->build);
+				sprintf(zfn + strlen(zfn), "/" FMT_qu "-%s-%s-%s.shsh", (long long int)client->ecid, client->device->product_type, client->version, client->build);
 				struct stat fst;
 				if (stat(zfn, &fst) != 0) {
 					gzFile zf = gzopen(zfn, "wb");
 					gzwrite(zf, bin, blen);
 					gzclose(zf);
 					info("SHSH saved to '%s'\n", zfn);
-				} else {
+				}
+				else {
 					info("SHSH '%s' already present.\n", zfn);
 				}
 				free(bin);
-			} else {
+			}
+			else {
 				error("ERROR: could not get TSS record data\n");
 			}
 			plist_free(client->tss);
@@ -706,7 +722,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		char *ipswtmp = strdup(client->ipsw);
 		strcat(tmpf, basename(ipswtmp));
 		free(ipswtmp);
-	} else {
+	}
+	else {
 		strcpy(tmpf, client->ipsw);
 	}
 	char* p = strrchr((const char*)tmpf, '.');
@@ -753,7 +770,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 				filesystem = strdup(fsname);
 			}
 			delete_fs = 1;
-		} else {
+		}
+		else {
 			// use <fsname>.extract as filename
 			filesystem = strdup(extfn);
 			fclose(extf);
@@ -829,7 +847,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 
 	if (client->mode->index == MODE_DFU) {
 		client->mode = &idevicerestore_modes[MODE_RECOVERY];
-	} else {
+	}
+	else {
 		if ((client->build_major > 8) && !(client->flags & FLAG_CUSTOM)) {
 			if (!client->image4supported) {
 				/* send ApTicket */
@@ -847,7 +866,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			return -2;
 		}
 		recovery_client_free(client);
-	
+
 		/* this must be long enough to allow the device to run the iBEC */
 		/* FIXME: Probably better to detect if the device is back then */
 		sleep(7);
@@ -925,7 +944,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 				partialzip_download_file(fwurl, bbfwpath, "bbfw.tmp");
 			}
 		}
-		else {
+		else if (!strcmp(device, "iPad2,1") || !strcmp(device, "iPad2,4") || !strcmp(device, "iPad2,5") || !strcmp(device, "iPad3,4") || !strcmp(device, "iPod5,1")) {
 			printf("Your device (%s) does not require a baseband, skipping baseband download.\n", device);
 		}
 	}
