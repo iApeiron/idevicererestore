@@ -924,9 +924,9 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 				plist_get_string_val(bbfw_path, &bbfwpath);
 				partialzip_download_file(fwurl, bbfwpath, "bbfw.tmp");
 			}
-			else {
-				printf("Your device (%s) does not require a baseband, skipping baseband download.\n", device);
-			}
+		}
+		else {
+			printf("Your device (%s) does not require a baseband, skipping baseband download.\n", device);
 		}
 	}
 
