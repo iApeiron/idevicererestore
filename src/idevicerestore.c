@@ -71,7 +71,9 @@ static struct option longopts[] = {
 	{ "keep-pers", no_argument,     NULL, 'k' },
 	{ "pwn",     no_argument,       NULL, 'p' },
 	{ "no-action", no_argument,     NULL, 'n' },
-	{ "rerestore",    no_argument,       NULL, 'r' },
+	{ "rerestore",    no_argument,      NULL, 'r' },
+	{ "baseband", required_argument,	NULL,	'b' },
+	{ "manifest", required_argument,	NULL,	'm' },
 	{ "cache-path", required_argument, NULL, 'C' },
 	{ NULL, 0, NULL, 0 }
 };
@@ -79,31 +81,13 @@ static struct option longopts[] = {
 void usage(int argc, char* argv[]) {
 	char* name = strrchr(argv[0], '/');
 	printf("Usage: %s [OPTIONS] FILE\n", (name ? name + 1 : argv[0]));
-	printf("Restore IPSW firmware FILE to an iOS device.\n\n");
-	printf("  -i, --ecid ECID\ttarget specific device by its hexadecimal ECID\n");
-	printf("                 \te.g. 0xaabb123456 or 00000012AABBCCDD\n");
-	printf("  -u, --udid UDID\ttarget specific device by its 40-digit device UDID\n");
-	printf("                 \tNOTE: only works with devices in normal mode.\n");
-	printf("  -d, --debug\t\tenable communication debugging\n");
-	printf("  -h, --help\t\tprints usage information\n");
-	printf("  -e, --erase\t\tperform a full restore, erasing all data (defaults to update)\n");
-	printf("  -c, --custom\t\trestore with a custom firmware\n");
+	printf("Re-restore IPSW firmware FILE to an iOS device.\n\n");
 	printf("  -r, --rerestore\ttake advantage of the 9.x 32 bit re-restore bug\n");
-	printf("  -l, --latest\t\tuse latest available firmware (with download on demand)\n");
-	printf("              \t\tDO NOT USE if you need to preserve the baseband (unlock)!\n");
-	printf("              \t\tUSE WITH CARE if you want to keep a jailbreakable firmware!\n");
-	printf("              \t\tThe FILE argument is ignored when using this option.\n");
-	printf("  -s, --cydia\t\tuse Cydia's signature service instead of Apple's\n");
-	printf("  -x, --exclude\t\texclude nor/baseband upgrade\n");
-	printf("  -t, --shsh\t\tfetch TSS record and save to .shsh file, then exit\n");
-	printf("  -k, --keep-pers\twrite personalized components to files for debugging\n");
-	printf("  -p, --pwn\t\tput device in pwned DFU mode and exit (limera1n devices only)\n");
-	printf("  -n, --no-action\tDo not perform any restore action. If combined with -l option\n");
-	printf("                 \tthe on demand ipsw download is performed before exiting.\n");
-	printf("  -C, --cache-path DIR\tUse specified directory for caching extracted\n");
-	printf("                      \tor other reused files.\n");
+	printf("	  --baseband\tspecify baseband to use instead of the latest OTA baseband (OPTIONAL)\n");
+	printf("	  --manifest\tspecify manifest to use with the specified baseband (OPTIONAL, USE WITH --baseband)\n");
 	printf("\n");
-	//printf("Homepage: <" PACKAGE_URL ">\n");
+	printf("Homepage: https://downgrade.party\n");
+	printf("Based on idevicerestore by libimobiledevice.\n");
 }
 #endif
 
@@ -797,6 +781,29 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		}
 	}
 
+	/* check iBoot build if the user is in recovery mode and determine if the user should be in DFU mode or remain in recovery mode */
+	if ((client->mode->index == MODE_RECOVERY) && (client->flags & FLAG_RERESTORE)) {
+		info("Recovery Mode Environment:\n");
+		char* value = NULL;
+		irecv_getenv(client->recovery->client, "build-version", &value);
+		info("iBoot build-version=%s\n", (value) ? value : "(unknown)");
+		/* if the current iBoot build is not 2817 (aka not iOS 9.x) and if it's not 1072 (aka not iOS 4.3.x), complain to the user */
+		if ((memcmp((value + 0x6), "2817", 0x4)) && (memcmp((value + 0x6), "1072", 0x4))) {
+			printf("Current OS is not iOS 9.x or iOS 4.3.x, please go into DFU mode and try again.\n");
+			exit(0);
+		}
+		else if ((memcmp((value + 0x6), "2817", 0x4) && (!memcmp((value + 0x6), "1072", 0x4)))) {
+			/* current OS is iOS 4.3.x, 4.x iBoot did not have nonce enforcement (due to the lack of APTickets) so the user can re-restore using recovery mode */
+			printf("Your device is on iOS 4.3.x so it is able to re-restore using recovery mode.\n");
+		}
+		else if (!memcmp((value + 0x6), "2817", 0x4)) {
+			/* current OS is iOS 9.x, the user can use recovery mode to re-restore due to the lack of nonce enforcement in 9.x iBoot (WTF Apple?!?) */
+			printf("Your device is on iOS 9.x so it is able to re-restore using recovery mode.\n");
+		}
+		free(value);
+		value = NULL;
+	}
+
 	// if the device is in normal mode, place device into recovery mode
 	if (client->mode->index == MODE_NORMAL) {
 		info("Entering recovery mode...\n");
@@ -881,10 +888,15 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			error("ERROR: can't get URL for latest firmware\n");
 			return -1;
 		}
-
-		partialzip_download_file(fwurl, "BuildManifest.plist", "BuildManifest_New.plist");
-		client->otamanifest = "BuildManifest_New.plist";
-
+		
+		if (!manifestPath) {
+			partialzip_download_file(fwurl, "BuildManifest.plist", "BuildManifest_New.plist");
+			client->otamanifest = "BuildManifest_New.plist";
+		}
+		else {
+			client->otamanifest = manifestPath;
+		}
+		
 		FILE *ofp = fopen(client->otamanifest, "rb");
 		struct stat *ostat = (struct stat*) malloc(sizeof(struct stat));
 		stat(client->otamanifest, ostat);
@@ -898,7 +910,6 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			plist_from_xml(opl, (uint32_t)ostat->st_size, &buildmanifest2);
 		free(ostat);
 		const char *device = client->device->product_type;
-		printf("Device: %s\n", device);
 
 		int indexCount = -1;
 
@@ -926,7 +937,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		unsigned long major = strtoul(build, NULL, 10);
 
 		if (major == 14 && indexCount == -1) {
-			printf("Error parsing BuildManifest.\n");
+			error("Error parsing BuildManifest.\n");
 			exit(-1);
 		}
 		else if (major == 14)
@@ -934,21 +945,26 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		else build_identity2 = build_manifest_get_build_identity(buildmanifest2, 0);
 		//free(opl);
 
-		/* if the device being re-restored is different from the specified devices, download the baseband */
-		if (strcmp(device, "iPad2,1") || strcmp(device, "iPad2,4") || strcmp(device, "iPad2,5") || strcmp(device, "iPad3,4") || strcmp(device, "iPod5,1")) {
+		/* if the device being re-restored is different from the specified devices, download the baseband firmware */
+		if ((strcmp(device, "iPad2,1") && strcmp(device, "iPad2,4") && strcmp(device, "iPad2,5") && strcmp(device, "iPad3,4") && strcmp(device, "iPod5,1") && !manifestPath)) {
 			char* bbfwpath = NULL;
-			printf("Your device (%s) requires a baseband, downloading from Apple.\n", device);
+			printf("Device: %s\n", device);
+			printf("Downloading baseband firmware.\n", device);
 			plist_t bbfw_path = plist_access_path(build_identity2, 4, "Manifest", "BasebandFirmware", "Info", "Path");
 			if (bbfw_path || plist_get_node_type(bbfw_path) != PLIST_STRING) {
 				plist_get_string_val(bbfw_path, &bbfwpath);
 				partialzip_download_file(fwurl, bbfwpath, "bbfw.tmp");
 			}
 		}
-		else if (!strcmp(device, "iPad2,1") || !strcmp(device, "iPad2,4") || !strcmp(device, "iPad2,5") || !strcmp(device, "iPad3,4") || !strcmp(device, "iPod5,1")) {
-			printf("Your device (%s) does not require a baseband, skipping baseband download.\n", device);
+		else if (manifestPath) {
+			/* user specified a manifest to use */
+			printf("Using pre-defined BuildManifest.\n");
+		}
+		else {
+			printf("Your device does not have a baseband.\n");
 		}
 	}
-
+	
 	if (!client->image4supported && (client->build_major > 8)) {
 		// we need another tss request with nonce.
 		unsigned char* nonce = NULL;
@@ -1024,6 +1040,10 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 				unlink(filesystem);
 			return result;
 		}
+	}
+	else if ((!client->mode->index == MODE_RESTORE) && (client->flags & FLAG_RERESTORE)) {
+		info("Device not in restore mode, are you not using iOS 9 blobs? Maybe your blobs have a nonce?\n");
+		exit(0);
 	}
 
 	info("Cleaning up...\n");
@@ -1182,7 +1202,7 @@ int main(int argc, char* argv[]) {
 		return -1;
 	}
 
-	while ((opt = getopt_long(argc, argv, "dhcersxtpli:u:nC:k", longopts, &optindex)) > 0) {
+	while ((opt = getopt_long(argc, argv, "dhcersxtplibm:u:nC:k", longopts, &optindex)) > 0) {
 		switch (opt) {
 		case 'h':
 			usage(argc, argv);
@@ -1201,7 +1221,15 @@ int main(int argc, char* argv[]) {
 			break;
 
 		case 'r':
-			client->flags |= FLAG_RERESTORE | FLAG_DEBUG;
+			client->flags |= FLAG_RERESTORE;
+			break;
+		
+		case 'm':
+			manifestPath = strdup(optarg);
+			break;
+		
+		case 'b':
+			basebandPath = strdup(optarg);
 			break;
 
 		case 's':
@@ -1658,12 +1686,12 @@ int get_tss_response(struct idevicerestore_client_t* client, plist_t build_ident
 		info("Using local SHSH\n");
 		return 0;
 	}
-
 	else if (client->flags & FLAG_RERESTORE) {
-		info("No local blobs found, checking Cydia TSS server for SHSH blobs\n");
+		int status_code = -1;
+		info("Attempting to check Cydia TSS server for SHSH blobs\n");
 		client->tss_url = strdup("http://cydia.saurik.com/TSS/controller?action=2");
 	} else {
-		info("Trying to fetch new SHSH blob from Apple\n");
+		info("Trying to fetch new SHSH blob\n");
 	}
 
 	/* populate parameters */
@@ -1772,7 +1800,9 @@ int get_tss_response(struct idevicerestore_client_t* client, plist_t build_ident
 	}
 
 	info("Received SHSH blobs\n");
-	client->tss_url = strdup("http://gs.apple.com/TSS/controller?action=2");
+	if (client->flags & FLAG_RERESTORE) {
+		client->tss_url = strdup("http://gs.apple.com/TSS/controller?action=2");
+	}
 
 	plist_free(request);
 	plist_free(parameters);

@@ -1864,15 +1864,70 @@ int restore_send_baseband_data(restored_client_t restore, struct idevicerestore_
 	
 	// extract baseband firmware to temp file
 	//bbfwtmp = tempnam(NULL, client->udid);
-	bbfwtmp = "bbfw.tmp";
+	if (!basebandPath) {
+		bbfwtmp = "bbfw.tmp";
+	}
+	else {
+		bbfwtmp = basebandPath;
+	}
 	
 	if (!bbfwtmp) {
 		error("WARNING: Could not generate temporary filename, using bbfw.tmp\n");
 		bbfwtmp = strdup("bbfw.tmp");
 	}
 	
-	partialzip_download_file(fwurl, bbfwpath, "bbfw.tmp");
-	
+	if (!basebandPath) {
+		partialzip_download_file(fwurl, bbfwpath, "bbfw.tmp");
+	}
+	else {
+		const char *device = client->device->product_type;
+		
+		plist_t node = NULL;
+		char *version = 0;
+		char *build = 0;
+		node = plist_dict_get_item(buildmanifest2, "ProductVersion");
+		plist_get_string_val(node, &version);
+		
+		node = plist_dict_get_item(buildmanifest2, "ProductBuildVersion");
+		plist_get_string_val(node, &build);
+		
+		if (!strcmp(device, "iPhone4,1") && !strcmp(build, "10B329")) {
+			partialzip_download_file("http://appldnld.apple.com/iOS6.1/091-2611.20130319.Fr54r/iPhone4,1_6.1.3_10B329_Restore.ipsw", bbfwpath, basebandPath);
+		}
+		else if (!strcmp(device, "iPhone4,1") && !strcmp(build, "12H321")) {
+			partialzip_download_file("http://appldnld.apple.com/ios8.4.1/031-31129-20150812-751A3CB8-3C8F-11E5-A8A5-A91A3A53DB92/iPhone4,1_8.4.1_12H321_Restore.ipsw", bbfwpath, basebandPath);
+		}	
+		else if (!strcmp(device, "iPhone5,1") && !strcmp(build, "12H321")) {
+			partialzip_download_file("http://appldnld.apple.com/ios8.4.1/031-31186-20150812-751D243C-3C8F-11E5-8E4F-B51A3A53DB92/iPhone5,1_8.4.1_12H321_Restore.ipsw", bbfwpath, basebandPath);
+		}
+		else if (!strcmp(device, "iPhone5,2") && !strcmp(build, "12H321")) {
+			partialzip_download_file("http://appldnld.apple.com/ios8.4.1/031-31065-20150812-7518F132-3C8F-11E5-A96A-A11A3A53DB92/iPhone5,2_8.4.1_12H321_Restore.ipsw", bbfwpath, basebandPath);
+		}
+		else if (!strcmp(device, "iPad2,2") && !strcmp(build, "10B329")) {
+			partialzip_download_file("http://appldnld.apple.com/iOS6.1/091-2472.20130319.Ta4rt/iPad2,2_6.1.3_10B329_Restore.ipsw", bbfwpath, basebandPath);
+		}
+		else if (!strcmp(device, "iPad2,2") && !strcmp(build, "12H321")) {
+			partialzip_download_file("http://appldnld.apple.com/ios8.4.1/031-31288-20150812-4490750C-3C90-11E5-84FD-231C3A53DB92/iPad2,2_8.4.1_12H321_Restore.ipsw", bbfwpath, basebandPath);
+		}
+		else if (!strcmp(device, "iPad2,3") && !strcmp(build, "10B329")) {
+			partialzip_download_file("http://appldnld.apple.com/iOS6.1/091-2464.20130319.KF6yt/iPad2,3_6.1.3_10B329_Restore.ipsw", bbfwpath, basebandPath);
+		}
+		else if (!strcmp(device, "iPad2,3") && !strcmp(build, "12H321")) {
+			partialzip_download_file("http://appldnld.apple.com/ios8.4.1/031-31281-20150812-40590580-3C90-11E5-92A1-011C3A53DB92/iPad2,3_8.4.1_12H321_Restore.ipsw", bbfwpath, basebandPath);
+		}
+		else if (!strcmp(device, "iPad3,2") && !strcmp(build, "12H321")) {
+			partialzip_download_file("http://appldnld.apple.com/ios8.4.1/031-30995-20150812-7517C906-3C8F-11E5-AEB0-971A3A53DB92/iPad3,2_8.4.1_12H321_Restore.ipsw", bbfwpath, basebandPath);
+		}
+		else if (!strcmp(device, "iPad3,3") && !strcmp(build, "12H321")) {
+			partialzip_download_file("http://appldnld.apple.com/ios8.4.1/031-31372-20150812-767B933A-3C90-11E5-9E13-FF1C3A53DB92/iPad3,3_8.4.1_12H321_Restore.ipsw", bbfwpath, basebandPath);
+		}
+		else if (!strcmp(device, "iPad3,5") && !strcmp(build, "12H321")) {
+			partialzip_download_file("http://appldnld.apple.com/ios8.4.1/031-31092-20150812-7518CFB8-3C8F-11E5-B849-A51A3A53DB92/iPad3,5_8.4.1_12H321_Restore.ipsw", bbfwpath, basebandPath);
+		}
+		else if (!strcmp(device, "iPad3,6") && !strcmp(build, "12H321")) {
+			partialzip_download_file("http://appldnld.apple.com/ios8.4.1/031-31187-20150812-751A8A7E-3C8F-11E5-B300-B71A3A53DB92/iPad3,6_8.4.1_12H321_Restore.ipsw", bbfwpath, basebandPath);
+		}
+	}
 	
 	if (!client->flags & FLAG_RERESTORE) {
 		if (ipsw_extract_to_file(client->ipsw, bbfwpath, bbfwtmp) != 0) {
