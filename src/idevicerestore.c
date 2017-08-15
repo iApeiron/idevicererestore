@@ -800,6 +800,10 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			/* current OS is iOS 9.x, the user can use recovery mode to re-restore due to the lack of nonce enforcement in 9.x iBoot (WTF Apple?!?) */
 			printf("Your device is on iOS 9.x so it is able to re-restore using recovery mode.\n");
 		}
+		else if (!memcmp((value + 0x6), "1219", 0x4)) {
+			/* user is on iOS 5, let them use the iOS 5 re-restore bug. */
+			printf("Your device is on iOS 5.x; assuming you are attempting an iOS 5 re-restore.\n");
+		}
 		free(value);
 		value = NULL;
 	}
