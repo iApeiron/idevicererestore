@@ -950,7 +950,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		//free(opl);
 
 		/* if the device being re-restored is different from the specified devices, download the baseband firmware */
-		if ((strcmp(device, "iPad2,1") && strcmp(device, "iPad2,4") && strcmp(device, "iPad2,5") && strcmp(device, "iPad3,4") && strcmp(device, "iPod5,1") && !manifestPath)) {
+		if ((strcmp(device, "iPad2,1") && strcmp(device, "iPad2,4") && strcmp(device, "iPad2,5") && strcmp(device, "iPad3,1") && strcmp(device, "iPad3,4") && strcmp(device, "iPod5,1") && !manifestPath)) {
 			char* bbfwpath = NULL;
 			printf("Device: %s\n", device);
 			printf("Downloading baseband firmware.\n", device);
