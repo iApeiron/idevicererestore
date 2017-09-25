@@ -98,6 +98,9 @@ int personalize_component(const char *component, const unsigned char* component_
 
 const char* get_component_name(const char* filename);
 
+const char* basebandPath;
+const char* manifestPath;
+
 #ifdef __cplusplus
 }
 #endif

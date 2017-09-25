@@ -71,7 +71,9 @@ static struct option longopts[] = {
 	{ "keep-pers", no_argument,     NULL, 'k' },
 	{ "pwn",     no_argument,       NULL, 'p' },
 	{ "no-action", no_argument,     NULL, 'n' },
-	{ "rerestore",    no_argument,       NULL, 'r' },
+	{ "rerestore",    no_argument,      NULL, 'r' },
+	{ "baseband", required_argument,	NULL,	'b' },
+	{ "manifest", required_argument,	NULL,	'm' },
 	{ "cache-path", required_argument, NULL, 'C' },
 	{ NULL, 0, NULL, 0 }
 };
@@ -79,31 +81,13 @@ static struct option longopts[] = {
 void usage(int argc, char* argv[]) {
 	char* name = strrchr(argv[0], '/');
 	printf("Usage: %s [OPTIONS] FILE\n", (name ? name + 1 : argv[0]));
-	printf("Restore IPSW firmware FILE to an iOS device.\n\n");
-	printf("  -i, --ecid ECID\ttarget specific device by its hexadecimal ECID\n");
-	printf("                 \te.g. 0xaabb123456 or 00000012AABBCCDD\n");
-	printf("  -u, --udid UDID\ttarget specific device by its 40-digit device UDID\n");
-	printf("                 \tNOTE: only works with devices in normal mode.\n");
-	printf("  -d, --debug\t\tenable communication debugging\n");
-	printf("  -h, --help\t\tprints usage information\n");
-	printf("  -e, --erase\t\tperform a full restore, erasing all data (defaults to update)\n");
-	printf("  -c, --custom\t\trestore with a custom firmware\n");
+	printf("Re-restore IPSW firmware FILE to an iOS device.\n\n");
 	printf("  -r, --rerestore\ttake advantage of the 9.x 32 bit re-restore bug\n");
-	printf("  -l, --latest\t\tuse latest available firmware (with download on demand)\n");
-	printf("              \t\tDO NOT USE if you need to preserve the baseband (unlock)!\n");
-	printf("              \t\tUSE WITH CARE if you want to keep a jailbreakable firmware!\n");
-	printf("              \t\tThe FILE argument is ignored when using this option.\n");
-	printf("  -s, --cydia\t\tuse Cydia's signature service instead of Apple's\n");
-	printf("  -x, --exclude\t\texclude nor/baseband upgrade\n");
-	printf("  -t, --shsh\t\tfetch TSS record and save to .shsh file, then exit\n");
-	printf("  -k, --keep-pers\twrite personalized components to files for debugging\n");
-	printf("  -p, --pwn\t\tput device in pwned DFU mode and exit (limera1n devices only)\n");
-	printf("  -n, --no-action\tDo not perform any restore action. If combined with -l option\n");
-	printf("                 \tthe on demand ipsw download is performed before exiting.\n");
-	printf("  -C, --cache-path DIR\tUse specified directory for caching extracted\n");
-	printf("                      \tor other reused files.\n");
+	printf("	  --baseband\tspecify baseband to use instead of the latest OTA baseband (OPTIONAL)\n");
+	printf("	  --manifest\tspecify manifest to use with the specified baseband (OPTIONAL, USE WITH --baseband)\n");
 	printf("\n");
-	//printf("Homepage: <" PACKAGE_URL ">\n");
+	printf("Homepage: https://downgrade.party\n");
+	printf("Based on idevicerestore by libimobiledevice.\n");
 }
 #endif
 
@@ -182,7 +166,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 	if (!client) {
 		return -1;
 	}
-	
+
 	char* install[50];
 	if (client->flags & FLAG_RERESTORE) {
 		printf("What type of blobs are you using? ('u' for update, 'e' for erase)\n");
@@ -190,11 +174,13 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		if (*install == 'e') {
 			printf("Erase install chosen.\n");
 			client->flags |= FLAG_ERASE | FLAG_RERESTORE;
-		} else if (*install == 'u') {
+		}
+		else if (*install == 'u') {
 			printf("Update install chosen.\n");
 			client->flags |= FLAG_RERESTORE;
 		}
 	}
+
 	if ((client->flags & FLAG_LATEST) && (client->flags & FLAG_CUSTOM)) {
 		error("ERROR: FLAG_LATEST cannot be used with FLAG_CUSTOM.\n");
 		return -1;
@@ -218,7 +204,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 
 	// check which mode the device is currently in so we know where to start
 
-	
+
 
 	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 	if (check_mode(client) < 0) {
@@ -226,13 +212,14 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		return -1;
 	}
 	idevicerestore_progress(client, RESTORE_STEP_DETECT, 0.1);
-	
+
 	if (client->mode->index == MODE_NORMAL) {
 		info("Found device in normal mode, going into recovery.\n");
-	} else {
+	}
+	else {
 		info("Found device in %s mode\n", client->mode->string);
 	}
-	
+
 	if (client->mode->index == MODE_WTF) {
 		unsigned int cpid = 0;
 
@@ -269,7 +256,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			char* fnpart = strrchr(s_wtfurl, '/');
 			if (!fnpart) {
 				fnpart = (char*)"x12220000_5_Recovery.ipsw";
-			} else {
+			}
+			else {
 				fnpart++;
 			}
 			struct stat fst;
@@ -281,7 +269,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 				strcpy(wtfipsw, client->cache_dir);
 				strcat(wtfipsw, "/");
 				strcat(wtfipsw, fnpart);
-			} else {
+			}
+			else {
 				strcpy(wtfipsw, fnpart);
 			}
 			if (stat(wtfipsw, &fst) != 0) {
@@ -348,7 +337,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 				free(ipsw);
 			}
 			return res;
-		} else {
+		}
+		else {
 			client->ipsw = ipsw;
 		}
 	}
@@ -386,7 +376,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			error("ERROR: Unable to extract Restore.plist from %s. Firmware file might be corrupt.\n", client->ipsw);
 			return -1;
 		}
-	} else {
+	}
+	else {
 		info("Extracting BuildManifest from IPSW\n");
 		if (ipsw_extract_build_manifest(client->ipsw, &buildmanifest, &tss_enabled) < 0) {
 			error("ERROR: Unable to extract BuildManifest from %s. Firmware file might be corrupt.\n", client->ipsw);
@@ -411,7 +402,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 	client->image4supported = is_image4_supported(client);
 	info("Device supports Image4: %s\n", (client->image4supported) ? "true" : "false");
 
-	
+
 	if (client->flags & FLAG_CUSTOM) {
 		/* prevent signing custom firmware */
 		tss_enabled = 0;
@@ -479,7 +470,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 					if (!strncmp(files[x], "DeviceTree", 10)) {
 						plist_dict_set_item(manifest, "RestoreDeviceTree", plist_copy(comp));
 					}
-				} else {
+				}
+				else {
 					error("WARNING: unhandled component %s\n", files[x]);
 					plist_free(comp);
 				}
@@ -512,7 +504,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 				strncpy(tt, lcmodel, 3);
 				tt[3] = 0;
 				kdict = plist_dict_get_item(node, tt);
-			} else {
+			}
+			else {
 				// Populated in older iOS IPSWs
 				kdict = plist_dict_get_item(buildmanifest, "RestoreKernelCaches");
 			}
@@ -555,7 +548,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			plist_t os = plist_dict_get_item(node, "User");
 			if (!os) {
 				error("ERROR: missing filesystem in Restore.plist\n");
-			} else {
+			}
+			else {
 				inf = plist_new_dict();
 				plist_dict_set_item(inf, "Path", plist_copy(os));
 				comp = plist_new_dict();
@@ -572,14 +566,16 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			// finally add manifest
 			plist_dict_set_item(build_identity, "Manifest", manifest);
 		}
-	} else if (client->flags & FLAG_ERASE) {
+	}
+	else if (client->flags & FLAG_ERASE) {
 		build_identity = build_manifest_get_build_identity_for_model_with_restore_behavior(buildmanifest, client->device->hardware_model, "Erase");
 		if (build_identity == NULL) {
 			error("ERROR: Unable to find any build identities\n");
 			plist_free(buildmanifest);
 			return -1;
 		}
-	} else {
+	}
+	else {
 		build_identity = build_manifest_get_build_identity_for_model_with_restore_behavior(buildmanifest, client->device->hardware_model, "Update");
 		if (!build_identity) {
 			build_identity = build_manifest_get_build_identity_for_model(buildmanifest, client->device->hardware_model);
@@ -602,7 +598,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			return -1;
 		}
 		info("Found ECID " FMT_qu "\n", (long long unsigned int)client->ecid);
-        
+
 		if (client->build_major > 8) {
 			unsigned char* nonce = NULL;
 			int nonce_size = 0;
@@ -617,7 +613,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 				}
 				client->nonce = nonce;
 				client->nonce_size = nonce_size;
-			} else {
+			}
+			else {
 				free(nonce);
 			}
 		}
@@ -637,7 +634,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			error("ERROR: could not fetch TSS record\n");
 			plist_free(buildmanifest);
 			return -1;
-		} else {
+		}
+		else {
 			char *bin = NULL;
 			uint32_t blen = 0;
 			plist_to_bin(client->tss, &bin, &blen);
@@ -646,22 +644,25 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 				if (client->cache_dir) {
 					strcpy(zfn, client->cache_dir);
 					strcat(zfn, "/shsh");
-				} else {
+				}
+				else {
 					strcpy(zfn, "shsh");
 				}
 				mkdir_with_parents(zfn, 0755);
-				sprintf(zfn+strlen(zfn), "/" FMT_qu "-%s-%s-%s.shsh", (long long int)client->ecid, client->device->product_type, client->version, client->build);
+				sprintf(zfn + strlen(zfn), "/" FMT_qu "-%s-%s-%s.shsh", (long long int)client->ecid, client->device->product_type, client->version, client->build);
 				struct stat fst;
 				if (stat(zfn, &fst) != 0) {
 					gzFile zf = gzopen(zfn, "wb");
 					gzwrite(zf, bin, blen);
 					gzclose(zf);
 					info("SHSH saved to '%s'\n", zfn);
-				} else {
+				}
+				else {
 					info("SHSH '%s' already present.\n", zfn);
 				}
 				free(bin);
-			} else {
+			}
+			else {
 				error("ERROR: could not get TSS record data\n");
 			}
 			plist_free(client->tss);
@@ -705,7 +706,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		char *ipswtmp = strdup(client->ipsw);
 		strcat(tmpf, basename(ipswtmp));
 		free(ipswtmp);
-	} else {
+	}
+	else {
 		strcpy(tmpf, client->ipsw);
 	}
 	char* p = strrchr((const char*)tmpf, '.');
@@ -752,7 +754,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 				filesystem = strdup(fsname);
 			}
 			delete_fs = 1;
-		} else {
+		}
+		else {
 			// use <fsname>.extract as filename
 			filesystem = strdup(extfn);
 			fclose(extf);
@@ -776,6 +779,33 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			free(filesystem);
 			filesystem = strdup(tmpf);
 		}
+	}
+
+	/* check iBoot build if the user is in recovery mode and determine if the user should be in DFU mode or remain in recovery mode */
+	if ((client->mode->index == MODE_RECOVERY) && (client->flags & FLAG_RERESTORE)) {
+		info("Recovery Mode Environment:\n");
+		char* value = NULL;
+		irecv_getenv(client->recovery->client, "build-version", &value);
+		info("iBoot build-version=%s\n", (value) ? value : "(unknown)");
+		/* if the current iBoot build is not 2817 (aka not iOS 9.x) and if it's not 1072 (aka not iOS 4.3.x), complain to the user */
+		if ((memcmp((value + 0x6), "2817", 0x4)) && (memcmp((value + 0x6), "1072", 0x4))) {
+			printf("Current OS is not iOS 9.x or iOS 4.3.x, please go into DFU mode and try again.\n");
+			exit(0);
+		}
+		else if ((memcmp((value + 0x6), "2817", 0x4) && (!memcmp((value + 0x6), "1072", 0x4)))) {
+			/* current OS is iOS 4.3.x, 4.x iBoot did not have nonce enforcement (due to the lack of APTickets) so the user can re-restore using recovery mode */
+			printf("Your device is on iOS 4.3.x so it is able to re-restore using recovery mode.\n");
+		}
+		else if (!memcmp((value + 0x6), "2817", 0x4)) {
+			/* current OS is iOS 9.x, the user can use recovery mode to re-restore due to the lack of nonce enforcement in 9.x iBoot (WTF Apple?!?) */
+			printf("Your device is on iOS 9.x so it is able to re-restore using recovery mode.\n");
+		}
+		else if (!memcmp((value + 0x6), "1219", 0x4)) {
+			/* user is on iOS 5, let them use the iOS 5 re-restore bug. */
+			printf("Your device is on iOS 5.x; assuming you are attempting an iOS 5 re-restore.\n");
+		}
+		free(value);
+		value = NULL;
 	}
 
 	// if the device is in normal mode, place device into recovery mode
@@ -828,7 +858,8 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 
 	if (client->mode->index == MODE_DFU) {
 		client->mode = &idevicerestore_modes[MODE_RECOVERY];
-	} else {
+	}
+	else {
 		if ((client->build_major > 8) && !(client->flags & FLAG_CUSTOM)) {
 			if (!client->image4supported) {
 				/* send ApTicket */
@@ -846,7 +877,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			return -2;
 		}
 		recovery_client_free(client);
-	
+
 		/* this must be long enough to allow the device to run the iBEC */
 		/* FIXME: Probably better to detect if the device is back then */
 		sleep(7);
@@ -861,14 +892,19 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			error("ERROR: can't get URL for latest firmware\n");
 			return -1;
 		}
-
-		partialzip_download_file(fwurl, "BuildManifest.plist", "BuildManifest_New.plist");
-		client->otamanifest = "BuildManifest_New.plist";
-
-		FILE *ofp = fopen(client->otamanifest,"rb");
+		
+		if (!manifestPath) {
+			partialzip_download_file(fwurl, "BuildManifest.plist", "BuildManifest_New.plist");
+			client->otamanifest = "BuildManifest_New.plist";
+		}
+		else {
+			client->otamanifest = manifestPath;
+		}
+		
+		FILE *ofp = fopen(client->otamanifest, "rb");
 		struct stat *ostat = (struct stat*) malloc(sizeof(struct stat));
 		stat(client->otamanifest, ostat);
-		char *opl = (char *)malloc(sizeof(char) *(ostat->st_size +1));
+		char *opl = (char *)malloc(sizeof(char) *(ostat->st_size + 1));
 		fread(opl, sizeof(char), ostat->st_size, ofp);
 		fclose(ofp);
 
@@ -878,7 +914,6 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			plist_from_xml(opl, (uint32_t)ostat->st_size, &buildmanifest2);
 		free(ostat);
 		const char *device = client->device->product_type;
-		printf("Device: %s\n", device);
 
 		int indexCount = -1;
 
@@ -906,7 +941,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		unsigned long major = strtoul(build, NULL, 10);
 
 		if (major == 14 && indexCount == -1) {
-			printf("Error parsing BuildManifest.\n");
+			error("Error parsing BuildManifest.\n");
 			exit(-1);
 		}
 		else if (major == 14)
@@ -914,14 +949,26 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		else build_identity2 = build_manifest_get_build_identity(buildmanifest2, 0);
 		//free(opl);
 
-		char* bbfwpath = NULL;
-		plist_t bbfw_path = plist_access_path(build_identity2, 4, "Manifest", "BasebandFirmware", "Info", "Path");
-		if (bbfw_path || plist_get_node_type(bbfw_path) != PLIST_STRING) {
-			plist_get_string_val(bbfw_path, &bbfwpath);
-			partialzip_download_file(fwurl, bbfwpath, "bbfw.tmp");
+		/* if the device being re-restored is different from the specified devices, download the baseband firmware */
+		if ((strcmp(device, "iPad2,1") && strcmp(device, "iPad2,4") && strcmp(device, "iPad2,5") && strcmp(device, "iPad3,1") && strcmp(device, "iPad3,4") && strcmp(device, "iPod5,1") && !manifestPath)) {
+			char* bbfwpath = NULL;
+			printf("Device: %s\n", device);
+			printf("Downloading baseband firmware.\n", device);
+			plist_t bbfw_path = plist_access_path(build_identity2, 4, "Manifest", "BasebandFirmware", "Info", "Path");
+			if (bbfw_path || plist_get_node_type(bbfw_path) != PLIST_STRING) {
+				plist_get_string_val(bbfw_path, &bbfwpath);
+				partialzip_download_file(fwurl, bbfwpath, "bbfw.tmp");
+			}
+		}
+		else if (manifestPath) {
+			/* user specified a manifest to use */
+			printf("Using pre-defined BuildManifest.\n");
+		}
+		else {
+			printf("Your device does not have a baseband.\n");
 		}
 	}
-
+	
 	if (!client->image4supported && (client->build_major > 8)) {
 		// we need another tss request with nonce.
 		unsigned char* nonce = NULL;
@@ -997,6 +1044,10 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 				unlink(filesystem);
 			return result;
 		}
+	}
+	else if ((!client->mode->index == MODE_RESTORE) && (client->flags & FLAG_RERESTORE)) {
+		info("Device not in restore mode, are you not using iOS 9 blobs? Maybe your blobs have a nonce?\n");
+		exit(0);
 	}
 
 	info("Cleaning up...\n");
@@ -1155,7 +1206,7 @@ int main(int argc, char* argv[]) {
 		return -1;
 	}
 
-	while ((opt = getopt_long(argc, argv, "dhcersxtpli:u:nC:k", longopts, &optindex)) > 0) {
+	while ((opt = getopt_long(argc, argv, "dhcersxtplibm:u:nC:k", longopts, &optindex)) > 0) {
 		switch (opt) {
 		case 'h':
 			usage(argc, argv);
@@ -1174,7 +1225,15 @@ int main(int argc, char* argv[]) {
 			break;
 
 		case 'r':
-			client->flags |= FLAG_RERESTORE | FLAG_DEBUG;
+			client->flags |= FLAG_RERESTORE;
+			break;
+		
+		case 'm':
+			manifestPath = strdup(optarg);
+			break;
+		
+		case 'b':
+			basebandPath = strdup(optarg);
 			break;
 
 		case 's':
@@ -1631,12 +1690,12 @@ int get_tss_response(struct idevicerestore_client_t* client, plist_t build_ident
 		info("Using local SHSH\n");
 		return 0;
 	}
-
 	else if (client->flags & FLAG_RERESTORE) {
-		info("No local blobs found, checking Cydia TSS server for SHSH blobs\n");
+		int status_code = -1;
+		info("Attempting to check Cydia TSS server for SHSH blobs\n");
 		client->tss_url = strdup("http://cydia.saurik.com/TSS/controller?action=2");
 	} else {
-		info("Trying to fetch new SHSH blob from Apple\n");
+		info("Trying to fetch new SHSH blob\n");
 	}
 
 	/* populate parameters */
@@ -1745,7 +1804,9 @@ int get_tss_response(struct idevicerestore_client_t* client, plist_t build_ident
 	}
 
 	info("Received SHSH blobs\n");
-	client->tss_url = strdup("http://gs.apple.com/TSS/controller?action=2");
+	if (client->flags & FLAG_RERESTORE) {
+		client->tss_url = strdup("http://gs.apple.com/TSS/controller?action=2");
+	}
 
 	plist_free(request);
 	plist_free(parameters);
